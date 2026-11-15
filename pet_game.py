@@ -62,7 +62,23 @@ h2{font-size:2.2em;color:#49352a;letter-spacing:.08em}
 .park{min-height:70vh;background:linear-gradient(#9ed4ef 0 30%,#83c779 30% 100%);border-radius:24px;padding:1.5rem;position:relative;overflow:hidden}.park:before{content:"";position:absolute;inset:30% 0 0;background:radial-gradient(ellipse at 20% 60%,#6aa95a 0 13%,transparent 14%),radial-gradient(ellipse at 80% 75%,#6aa95a 0 16%,transparent 17%)}
 .park-card,.park-log{position:relative;background:#fffdf9dd;border:2px solid #fff;border-radius:16px;padding:1rem;box-shadow:0 8px 20px #315b4655}.park-log{height:360px;overflow-y:auto;margin:1rem 0;padding:1rem}.park-loading{display:grid;place-items:center;min-height:360px;text-align:center;background:#fffdf9dd;border:2px solid #fff;border-radius:16px;box-shadow:0 8px 20px #315b4655}.park-loading:after{content:"";width:2.5rem;height:2.5rem;margin-top:1rem;border:4px solid #d5e8c9;border-top-color:#4d7a3d;border-radius:50%;animation:spin 1s linear infinite}.park-line{display:flex;flex-direction:column;max-width:82%;padding:.7rem 1rem;margin:.7rem 0;border:0;border-radius:16px;box-shadow:0 3px 8px #315b4620;animation:screen-in .3s ease}.park-line strong{font-size:.8rem;margin-bottom:.2rem;color:#806957}.park-line span{white-space:pre-wrap}.npc-line{margin-right:auto;background:#fff}.pet-line{margin-left:auto;background:#e8f4dc}.pet-line strong{color:#4d7a3d}
 @keyframes spin{to{transform:rotate(360deg)}}
+@media (max-width:600px){
+body{max-width:none;margin:0;padding:env(safe-area-inset-top) .75rem env(safe-area-inset-bottom);font-size:16px}
+section:not([hidden]){min-height:calc(100dvh - 1.5rem)}
+.title{min-height:100dvh;margin:0 -.75rem;padding:1rem;border-radius:0}
+.title h1{font-size:clamp(2.2em,12vw,4em);letter-spacing:.08em}
+.game-shell{min-height:calc(100dvh - 1.5rem);padding:.75rem;border-radius:12px}
+.pet-stage{flex-direction:column;justify-content:center;min-height:250px;padding:.5rem}
+.pet-avatar{width:170px;height:170px}
+#conversation{height:27dvh;min-height:150px}
+.quest-board{right:.75rem;top:.75rem;width:min(230px,calc(100vw - 1.5rem))}
+.park{min-height:calc(100dvh - 1.5rem);margin:0 -.1rem;padding:1rem;border-radius:16px}
+.park-log,.park-loading{height:calc(100dvh - 13rem);min-height:240px}
+.park-line{max-width:91%}
+input,select,button{min-height:2.8rem}
+}
 </style>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <section id="title" class="title"><div><p>AN AI PET GROWING STORY</p><h1>ミネラルウォーター。</h1>
 <div class="key-box"><input id="key" type="password" placeholder="初回のみGroq APIキー（gsk_で始まるキー）">
 <label><input id="save" type="checkbox" checked> このブラウザにAPIキーを保存する</label></div>
