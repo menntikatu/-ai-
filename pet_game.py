@@ -4,6 +4,7 @@ import random
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from openai import AuthenticationError, OpenAI
 
@@ -220,15 +221,16 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_GET(self):
-        if self.path == "/ui.js":
+        path = urlsplit(self.path).path
+        if path == "/ui.js":
             raw = Path("dist/ui.js").read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/javascript; charset=utf-8")
-        elif self.path == "/":
+        elif path == "/":
             raw = HTML.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
-        elif self.path == "/robots.txt":
+        elif path == "/robots.txt":
             raw = b"User-agent: *\nAllow: /\n"
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
