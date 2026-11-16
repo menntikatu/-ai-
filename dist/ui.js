@@ -13,6 +13,9 @@ let voiceEnabled = true;
 let parkSpeech = [];
 let appleQuestShown = false;
 let adventureRunId = 0;
+let voiceSocket = null;
+let voiceRecorder = null;
+let voiceStream = null;
 let testQuestions = [];
 let testAnswers = [];
 let testIndex = 0;
@@ -27,6 +30,90 @@ function speakJapanese(text) {
     speech.volume = 1;
     speech.rate = 1;
     window.speechSynthesis.speak(speech);
+}
+async function requestMicrophonePermission() {
+    const status = $("#microphoneStatus");
+    if (!navigator.mediaDevices?.getUserMedia) {
+        status.textContent = "このブラウザはマイクに対応していません。";
+        return;
+    }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+        status.textContent = "マイク使用許可済み。実会話を始められます。";
+    }
+    catch {
+        status.textContent = "マイクが許可されていません。実会話を使うときに許可してください。";
+    }
+}
+async function toggleVoiceConversation() {
+    const button = $("#actualConversationButton");
+    if (voiceRecorder) {
+        voiceRecorder.stop();
+        voiceRecorder = null;
+        voiceStream?.getTracks().forEach((track) => track.stop());
+        voiceSocket?.close();
+        voiceStream = null;
+        voiceSocket = null;
+        button.textContent = "実会話";
+        $("#microphoneStatus").textContent = "実会話を停止しました。";
+        return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+        alert("このブラウザはマイク会話に対応していません。");
+        return;
+    }
+    try {
+        voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        voiceSocket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        voiceSocket.binaryType = "arraybuffer";
+        voiceSocket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === "transcript" && data.text)
+                write(`あなた: ${data.text}`);
+            if (data.type === "reply" && data.text) {
+                showSpeech(data.text);
+                write(`${petName}: ${data.text}`);
+                speakJapanese(data.text);
+            }
+            if (data.type === "error")
+                alert(`音声通信エラー: ${data.message ?? "不明なエラー"}`);
+        };
+        voiceSocket.onclose = () => {
+            if (voiceRecorder) {
+                voiceRecorder.stop();
+                voiceRecorder = null;
+                voiceStream?.getTracks().forEach((track) => track.stop());
+                voiceStream = null;
+                button.textContent = "マイクで話す";
+            }
+        };
+        await new Promise((resolve, reject) => {
+            voiceSocket?.addEventListener("open", () => resolve(), { once: true });
+            voiceSocket?.addEventListener("error", () => reject(new Error("WebSocketに接続できません。")), { once: true });
+        });
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
+        voiceRecorder = mimeType ? new MediaRecorder(voiceStream, { mimeType }) : new MediaRecorder(voiceStream);
+        voiceRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0 && voiceSocket?.readyState === WebSocket.OPEN)
+                voiceSocket.send(event.data);
+        };
+        voiceRecorder.start(1200);
+        button.textContent = "実会話を停止";
+        $("#microphoneStatus").textContent = "実会話中。話しかけてください。";
+        if ("speechSynthesis" in window)
+            window.speechSynthesis.cancel();
+    }
+    catch (error) {
+        voiceStream?.getTracks().forEach((track) => track.stop());
+        voiceStream = null;
+        voiceSocket?.close();
+        voiceSocket = null;
+        button.textContent = "実会話";
+        $("#microphoneStatus").textContent = "実会話を開始できませんでした。";
+        alert(`マイクを開始できません: ${error instanceof Error ? error.message : "不明なエラー"}`);
+    }
 }
 function show(id) {
     document.querySelectorAll("section").forEach((section) => {
@@ -106,14 +193,29 @@ function createTestQuestions(level) {
 function normalizeAnswer(value) {
     return value.trim().toLowerCase().replace(/[（）()\s]/g, "").replace(/、/g, ",");
 }
-function startTest() {
+async function startTest() {
     const level = $("#testLevel").value;
     testQuestions = createTestQuestions(level);
     testAnswers = [];
     testIndex = 0;
     $("#testLevelName").textContent = level;
     show("test");
-    renderTestQuestion();
+    $("#testLoading").hidden = false;
+    $("#testQuestionCard").hidden = true;
+    const loadingText = $("#testLoadingText");
+    try {
+        for (const [index, question] of testQuestions.entries()) {
+            loadingText.textContent = `ペットが第${index + 1}問を解いています…`;
+            const result = await call("test_answer", question.question, { expected: question.answer });
+            testAnswers[index] = result.answer ?? "分かりません";
+            await new Promise((resolve) => window.setTimeout(resolve, 250));
+        }
+        finishTest();
+    }
+    catch (error) {
+        alert(`テスト中に通信エラーが発生しました: ${error instanceof Error ? error.message : "不明なエラー"}`);
+        show("testSelect");
+    }
 }
 function renderTestQuestion() {
     const question = testQuestions[testIndex];
@@ -121,6 +223,22 @@ function renderTestQuestion() {
     $("#testQuestion").textContent = question.question;
     $("#testAnswer").textContent = "ペットが考えています…";
     $("#testNextButton").textContent = "ペットに解かせる";
+}
+function finishTest() {
+    const mistakes = testQuestions.flatMap((question, index) => normalizeAnswer(testAnswers[index]) === normalizeAnswer(question.answer) ? [] : [{
+            index: index + 1, question: question.question, answer: testAnswers[index] || "未回答", correct: question.answer,
+        }]);
+    $("#testScore").textContent = `${testQuestions.length - mistakes.length} / ${testQuestions.length} 点`;
+    const paper = $("#testPaper");
+    paper.replaceChildren();
+    mistakes.forEach((mistake) => {
+        const row = document.createElement("p");
+        row.textContent = `第${mistake.index}問：${mistake.question}｜ペットの答え：${mistake.answer}｜正解：${mistake.correct}`;
+        paper.appendChild(row);
+    });
+    if (mistakes.length === 0)
+        paper.textContent = "全問正解です！";
+    show("testResult");
 }
 async function nextTestQuestion() {
     const button = $("#testNextButton");
@@ -142,21 +260,7 @@ async function nextTestQuestion() {
         renderTestQuestion();
         return;
     }
-    const mistakes = testQuestions.flatMap((question, index) => normalizeAnswer(testAnswers[index]) === normalizeAnswer(question.answer) ? [] : [{
-            index: index + 1, question: question.question, answer: testAnswers[index] || "未回答", correct: question.answer,
-        }]);
-    $("#testScore").textContent = `${testQuestions.length - mistakes.length} / ${testQuestions.length} 点`;
-    const paper = $("#testPaper");
-    paper.replaceChildren();
-    mistakes.forEach((mistake) => {
-        const row = document.createElement("p");
-        row.textContent = `第${mistake.index}問：${mistake.question}｜あなたの答え：${mistake.answer}｜正解：${mistake.correct}`;
-        paper.appendChild(row);
-    });
-    if (mistakes.length === 0) {
-        paper.textContent = "全問正解です！";
-    }
-    show("testResult");
+    finishTest();
 }
 function write(text) {
     const bubble = document.createElement("div");
@@ -234,6 +338,7 @@ function setActionLock(locked) {
         button.classList.toggle("tutorial-target", locked && enabled);
     };
     action("#talkButton", tutorialStep === 4);
+    action("#actualConversationButton", true);
     action("#adventureButton", false);
     action("#statusButton", tutorialStep === 3);
     const message = $("#msg");
@@ -332,6 +437,7 @@ async function start() {
         show("game");
         tutorialStep = 0;
         showTutorial();
+        void requestMicrophonePermission();
     }
     catch (error) {
         alert(error instanceof Error ? error.message : "開始できませんでした。");
@@ -457,6 +563,8 @@ function exitPark() {
 }
 function forceConversationScreen() {
     adventureRunId += 1;
+    if (voiceRecorder)
+        void toggleVoiceConversation();
     if ("speechSynthesis" in window)
         window.speechSynthesis.cancel();
     show("game");
@@ -495,6 +603,7 @@ $("#parkButton").addEventListener("click", startPark);
 $("#adventureBackButton").addEventListener("click", exitPark);
 $("#parkExitButton").addEventListener("click", exitPark);
 $("#voiceButton").addEventListener("click", toggleVoice);
+$("#actualConversationButton").addEventListener("click", () => void toggleVoiceConversation());
 $("#msg").addEventListener("keydown", (event) => {
     if (event.key === "Enter")
         void talk();
@@ -502,6 +611,11 @@ $("#msg").addEventListener("keydown", (event) => {
 document.addEventListener("keydown", (event) => {
     if (event.key === "Escape")
         forceConversationScreen();
+    if (event.ctrlKey && event.key === "2") {
+        event.preventDefault();
+        if (!document.querySelector("#game")?.hidden)
+            void toggleVoiceConversation();
+    }
 });
 $("#tutorialNext").addEventListener("click", nextTutorial);
 Object.assign(window, { begin, nextName, nextPlayer, start, talk, adventure, showStatus });

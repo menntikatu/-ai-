@@ -1,6 +1,10 @@
 import json
+import base64
+import hashlib
 import os
 import random
+import struct
+import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -61,6 +65,7 @@ h2{font-size:2.2em;color:#49352a;letter-spacing:.08em}
 .spirit{font-size:2.5rem;filter:drop-shadow(0 0 8px #fff)}.tutorial h3{margin:.1rem 0;color:#ffe4a8}.tutorial p{margin:.3rem 0}.tutorial button{background:#ffe4a8;color:#31264d;border:0}
 .park{min-height:70vh;background:linear-gradient(#9ed4ef 0 30%,#83c779 30% 100%);border-radius:24px;padding:1.5rem;position:relative;overflow:hidden}.park:before{content:"";position:absolute;inset:30% 0 0;background:radial-gradient(ellipse at 20% 60%,#6aa95a 0 13%,transparent 14%),radial-gradient(ellipse at 80% 75%,#6aa95a 0 16%,transparent 17%)}
 .park-card,.park-log{position:relative;background:#fffdf9dd;border:2px solid #fff;border-radius:16px;padding:1rem;box-shadow:0 8px 20px #315b4655}.park-log{height:360px;overflow-y:auto;margin:1rem 0;padding:1rem}.park-loading{display:grid;place-items:center;min-height:360px;text-align:center;background:#fffdf9dd;border:2px solid #fff;border-radius:16px;box-shadow:0 8px 20px #315b4655}.park-loading:after{content:"";width:2.5rem;height:2.5rem;margin-top:1rem;border:4px solid #d5e8c9;border-top-color:#4d7a3d;border-radius:50%;animation:spin 1s linear infinite}.park-line{display:flex;flex-direction:column;max-width:82%;padding:.7rem 1rem;margin:.7rem 0;border:0;border-radius:16px;box-shadow:0 3px 8px #315b4620;animation:screen-in .3s ease}.park-line strong{font-size:.8rem;margin-bottom:.2rem;color:#806957}.park-line span{white-space:pre-wrap}.npc-line{margin-right:auto;background:#fff}.pet-line{margin-left:auto;background:#e8f4dc}.pet-line strong{color:#4d7a3d}
+.game-actions{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.5rem}.game-actions button{margin:0;flex:1 1 7rem}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (max-width:600px){
 body{max-width:none;margin:0;padding:env(safe-area-inset-top) .75rem env(safe-area-inset-bottom);font-size:16px}
@@ -76,6 +81,7 @@ section:not([hidden]){min-height:calc(100dvh - 1.5rem)}
 .park-log,.park-loading{height:calc(100dvh - 13rem);min-height:240px}
 .park-line{max-width:91%}
 input,select,button{min-height:2.8rem}
+.game-actions{gap:.5rem}.game-actions button{flex-basis:calc(50% - .5rem)}
 .test-paper{max-height:55vh;overflow-y:auto}
 }
 </style>
@@ -91,14 +97,14 @@ input,select,button{min-height:2.8rem}
 <button type="button" id="startButton">決定</button></section>
 <section id="game" hidden>
 <div class="game-shell"><div id="tutorial" class="tutorial" hidden><div class="spirit">✦</div><div><h3 id="tutorialTitle">精霊の案内</h3><p id="tutorialText"></p><button type="button" id="tutorialNext">次へ</button></div></div>
-<p id="status" class="meta"></p><div class="pet-stage">
+<p id="status" class="meta"></p><p id="microphoneStatus" class="meta">マイクの許可を確認しています…</p><div class="pet-stage">
 <div id="petAvatar" class="pet-avatar"></div><div id="speech" class="speech">こちらを見ている。</div>
 </div><div id="conversation"></div>
 <input id="msg" placeholder="ペットに話しかける">
-<button type="button" id="talkButton">話す</button><button type="button" id="adventureButton">冒険</button><button type="button" id="statusButton">学習・性格</button><button type="button" id="testButton">テスト</button><button type="button" id="voiceButton">読み上げ: ON</button>
+<div class="game-actions"><button type="button" id="talkButton">話す</button><button type="button" id="actualConversationButton" title="Ctrl+2でも開始・停止できます">実会話（Ctrl+2）</button><button type="button" id="adventureButton">冒険</button><button type="button" id="statusButton">学習・性格</button><button type="button" id="testButton">テスト</button><button type="button" id="voiceButton">読み上げ: ON</button></div>
 </div></section>
 <section id="testSelect" hidden><h2>テスト</h2><p>難易度を選んで挑戦しましょう。</p><select id="testLevel"><option>初級</option><option>中級</option><option>上級</option><option>超上級</option></select><br><button type="button" id="testStartButton">開始</button><button type="button" id="testBackButton">戻る</button></section>
-<section id="test" hidden><h2><span id="testLevelName"></span>テスト</h2><p id="testProgress"></p><div class="park-card"><h3 id="testQuestion"></h3><p id="testAnswer">ペットが考えています…</p><button type="button" id="testNextButton">ペットに解かせる</button></div></section>
+<section id="test" hidden><h2><span id="testLevelName"></span>テスト</h2><div id="testLoading" class="park-loading"><div id="testLoadingText">ペットがテストを解いています…</div></div><div id="testQuestionCard" class="park-card" hidden><p id="testProgress"></p><h3 id="testQuestion"></h3><p id="testAnswer"></p></div></section>
 <section id="testResult" hidden><h2>テスト結果</h2><p id="testScore"></p><div id="testPaper" class="park-card"></div><button type="button" id="testResultBackButton">会話に戻る</button></section>
 <section id="adventureSelect" hidden><h2>冒険の場所</h2><div class="park-card"><h3>第1ステージ　公園</h3><p>公園で、通りすがりの人間とペットに出会います。</p><button type="button" id="parkButton">公園へ行く</button><button type="button" id="adventureBackButton">戻る</button></div></section>
 <section id="parkStage" hidden><div class="park"><h2>第1ステージ　公園</h2><p class="meta">あなたも会話に加わり、公園でのやりとりを見守っています。</p><div id="parkLoading" class="park-loading"><div>公園で会話をしています…</div></div><div id="parkLog" class="park-log" hidden></div><button type="button" id="parkExitButton" onclick="exitPark()" disabled>終了</button></div></section>
@@ -248,6 +254,47 @@ def get_profile():
     return {"iq": iq, "profile": result.choices[0].message.content.strip()}
 
 
+def websocket_frame(payload):
+    payload = payload.encode() if isinstance(payload, str) else payload
+    length = len(payload)
+    if length < 126:
+        header = bytes([0x81, length])
+    elif length < 65536:
+        header = bytes([0x81, 126]) + struct.pack("!H", length)
+    else:
+        header = bytes([0x81, 127]) + struct.pack("!Q", length)
+    return header + payload
+
+
+def websocket_read(stream):
+    header = stream.read(2)
+    if len(header) != 2:
+        return None, None
+    opcode = header[0] & 0x0F
+    length = header[1] & 0x7F
+    masked = header[1] & 0x80
+    if length == 126:
+        length = struct.unpack("!H", stream.read(2))[0]
+    elif length == 127:
+        length = struct.unpack("!Q", stream.read(8))[0]
+    mask = stream.read(4) if masked else b""
+    payload = bytearray(stream.read(length))
+    if masked:
+        for index in range(len(payload)):
+            payload[index] ^= mask[index % 4]
+    return opcode, bytes(payload)
+
+
+def transcribe_audio(audio):
+    client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=state["key"])
+    result = client.audio.transcriptions.create(
+        model="whisper-large-v3-turbo",
+        file=("speech.webm", audio, "audio/webm"),
+        language="ja",
+    )
+    return result.text.strip()
+
+
 def answer_test_question(question, expected):
     client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=state["key"])
     result = client.chat.completions.create(
@@ -290,6 +337,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path == "/ws" and self.headers.get("Upgrade", "").lower() == "websocket":
+            self.handle_websocket()
+            return
         if path == "/ui.js":
             raw = Path("dist/ui.js").read_bytes()
             self.send_response(200)
@@ -308,6 +358,61 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
+
+    def handle_websocket(self):
+        key = self.headers.get("Sec-WebSocket-Key")
+        if not key:
+            self.send_error(400, "WebSocket key is missing")
+            return
+        accept = base64.b64encode(
+            hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()
+        ).decode()
+        self.send_response(101, "Switching Protocols")
+        self.send_header("Upgrade", "websocket")
+        self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", accept)
+        self.end_headers()
+        self.wfile.flush()
+        send_lock = threading.Lock()
+
+        def send_message(message):
+            with send_lock:
+                self.wfile.write(websocket_frame(json.dumps(message, ensure_ascii=False)))
+                self.wfile.flush()
+
+        def process_audio(payload):
+            try:
+                send_message({"type": "listening"})
+                transcript = transcribe_audio(payload)
+                if not transcript:
+                    return
+                send_message({"type": "transcript", "text": transcript})
+                answer = ask("talk", transcript)
+                state["memories"].append(f"プレイヤー: {transcript} / ペット: {answer}")
+                state["personality"]["好奇心"] += 1
+                send_message({"type": "reply", "text": answer})
+            except Exception as error:
+                try:
+                    send_message({"type": "error", "message": str(error)})
+                except OSError:
+                    return
+
+        try:
+            while True:
+                opcode, payload = websocket_read(self.rfile)
+                if opcode in (None, 8):
+                    break
+                if opcode != 2 or not payload:
+                    continue
+                threading.Thread(target=process_audio, args=(payload,), daemon=True).start()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
+        except Exception as error:
+            try:
+                self.wfile.write(websocket_frame(json.dumps({"type": "error", "message": str(error)}, ensure_ascii=False)))
+                self.wfile.flush()
+            except OSError:
+                return
 
     def do_POST(self):
         if self.path != "/api":
