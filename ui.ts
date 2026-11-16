@@ -9,6 +9,8 @@ type ApiResult = {
   error?: string;
   personality?: Record<string, number>;
   memories?: string[];
+  iq?: number;
+  profile?: string;
 };
 
 const $ = <T extends HTMLElement>(selector: string): T => {
@@ -363,8 +365,8 @@ function toggleVoice(): void {
 async function showStatus(): Promise<void> {
   try {
     const result = await call("status");
-    write(`性格: ${JSON.stringify(result.personality)}`);
-    write(`学習: ${result.memories?.join(" / ") || "まだありません"}`);
+    write(`知能レベル（IQ）: ${result.iq ?? 3}`);
+    write(`プレイヤーへの印象・心の声:\n${result.profile ?? "まだよく分からない。"}`);
     if (tutorialStep === 3) completeTutorialAction();
   } catch (error) {
     alert(error instanceof Error ? error.message : "取得できませんでした。");

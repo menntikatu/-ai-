@@ -218,6 +218,31 @@ def check_apple_memory():
     return result.choices[0].message.content.strip().upper().startswith("YES")
 
 
+def get_profile():
+    iq = 3 + len(state["memories"])
+    client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=state["key"])
+    result = client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=[
+            {
+                "role": "system",
+                "content": f"""
+あなたはペット「{state['name']}」です。プレイヤー「{state['player_name']}」との会話を振り返ってください。
+プレイヤーへの印象と、ペットの素直な心の声を、それぞれ日本語で短く1文ずつ書いてください。
+出力形式:
+印象: ...
+心の声: ...
+学習内容を列挙せず、幼く素朴で自然な言葉にしてください。
+会話記憶: {state['memories']}
+性格: {state['personality']}
+""",
+            },
+            {"role": "user", "content": "今のプレイヤーへの気持ちを教えて。"},
+        ],
+    )
+    return {"iq": iq, "profile": result.choices[0].message.content.strip()}
+
+
 def teaches_apple(message):
     explanation_words = ("果物", "赤い", "甘い", "食べる", "食べて", "木になる", "丸い")
     return "りんご" in message and any(word in message for word in explanation_words)
@@ -278,7 +303,7 @@ class Handler(BaseHTTPRequestHandler):
                 state["personality"] = {"やさしさ": 0, "好奇心": 0, "元気": 0}
                 result = {"message": "started"}
             elif action == "status":
-                result = {"personality": state["personality"], "memories": state["memories"]}
+                result = {"personality": state["personality"], **get_profile()}
             elif action == "adventure_start":
                 state["adventure"] = start_adventure()
                 state["adventure"]["used"] = []

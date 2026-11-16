@@ -344,8 +344,8 @@ function toggleVoice() {
 async function showStatus() {
     try {
         const result = await call("status");
-        write(`性格: ${JSON.stringify(result.personality)}`);
-        write(`学習: ${result.memories?.join(" / ") || "まだありません"}`);
+        write(`知能レベル（IQ）: ${result.iq ?? 3}`);
+        write(`プレイヤーへの印象・心の声:\n${result.profile ?? "まだよく分からない。"}`);
         if (tutorialStep === 3)
             completeTutorialAction();
     }
