@@ -27,6 +27,10 @@ let voiceEnabled = true;
 let parkSpeech: string[] = [];
 let appleQuestShown = false;
 let adventureRunId = 0;
+type TestQuestion = {question: string; answer: string};
+let testQuestions: TestQuestion[] = [];
+let testAnswers: string[] = [];
+let testIndex = 0;
 const conversation = $("#conversation");
 $("#key").setAttribute("value", apiKey);
 
@@ -46,6 +50,124 @@ function show(id: string): void {
     section.hidden = !visible;
     section.style.display = visible ? (id === "title" ? "grid" : "block") : "none";
   });
+}
+
+function createTestQuestions(level: string): TestQuestion[] {
+  if (level === "初級") {
+    return Array.from({length: 20}, (_, index) => {
+      const a = index + 2;
+      const b = (index * 3) % 9 + 1;
+      return {question: `${a} + ${b} =`, answer: String(a + b)};
+    });
+  }
+  if (level === "中級") {
+    const arithmetic = Array.from({length: 10}, (_, index) => {
+      const a = index + 2;
+      const b = index % 5 + 2;
+      return index % 2 === 0
+        ? {question: `${a} × ${b} =`, answer: String(a * b)}
+        : {question: `${a * b} ÷ ${b} =`, answer: String(a)};
+    });
+    const sentences: TestQuestion[] = [
+      {question: "「雨が降っているので、傘を持って出かけた。」雨が降っている理由で持った物は？", answer: "傘"},
+      {question: "「犬が庭で元気に走る。」走っている場所は？", answer: "庭"},
+      {question: "「朝ごはんを食べてから学校へ行く。」先にすることは？", answer: "朝ごはん"},
+      {question: "「姉は本を読み、弟は絵を描いた。」絵を描いたのは誰？", answer: "弟"},
+      {question: "「赤い花の隣に青い花がある。」青い花の隣にある花は？", answer: "赤い花"},
+      {question: "「電車が遅れたため、歩いて帰った。」帰る方法は？", answer: "歩いて"},
+      {question: "「冷蔵庫から牛乳を出した。」出した物は？", answer: "牛乳"},
+      {question: "「公園で友だちとボールを投げた。」誰と投げた？", answer: "友だち"},
+      {question: "「夜になったので、明かりをつけた。」つけた物は？", answer: "明かり"},
+      {question: "「先生が黒板に文字を書いた。」文字を書いた人は？", answer: "先生"},
+    ];
+    return [...arithmetic, ...sentences];
+  }
+  if (level === "上級") {
+    const questions: TestQuestion[] = [
+      {question: "x² + 5x + 6 を因数分解", answer: "(x+2)(x+3)"},
+      {question: "x² - 7x + 12 を因数分解", answer: "(x-3)(x-4)"},
+      {question: "x² - 9 を因数分解", answer: "(x-3)(x+3)"},
+      {question: "x² + 7x + 10 を因数分解", answer: "(x+2)(x+5)"},
+      {question: "√49 =", answer: "7"},
+      {question: "√81 =", answer: "9"},
+      {question: "√144 =", answer: "12"},
+      {question: "√25 + √16 =", answer: "9"},
+      {question: "「知識」の読み方", answer: "ちしき"},
+      {question: "「成長」の読み方", answer: "せいちょう"},
+      {question: "「冒険」の読み方", answer: "ぼうけん"},
+      {question: "「記憶」の読み方", answer: "きおく"},
+      {question: "「好奇心」の読み方", answer: "こうきしん"},
+      {question: "「自然」の読み方", answer: "しぜん"},
+      {question: "「判断」の読み方", answer: "はんだん"},
+      {question: "「理解」の読み方", answer: "りかい"},
+      {question: "「性格」の読み方", answer: "せいかく"},
+      {question: "「会話」の読み方", answer: "かいわ"},
+      {question: "「学習」の読み方", answer: "がくしゅう"},
+      {question: "「経験」の読み方", answer: "けいけん"},
+    ];
+    return questions;
+  }
+  return [
+    {question: "y = x² - 4x + 3 の頂点の x 座標", answer: "2"},
+    {question: "y = x² - 4x + 3 の頂点の y 座標", answer: "-1"},
+    {question: "x² - 5x + 6 = 0 の解（小さい順に , 区切り）", answer: "2,3"},
+    {question: "x² - 7x + 10 = 0 の解（小さい順に , 区切り）", answer: "2,5"},
+    {question: "y = x² + 2x - 3 の頂点の x 座標", answer: "-1"},
+    {question: "y = x² + 2x - 3 の頂点の y 座標", answer: "-4"},
+    {question: "x² - x - 6 = 0 の解（小さい順に , 区切り）", answer: "-2,3"},
+    {question: "x² + x - 6 = 0 の解（小さい順に , 区切り）", answer: "-3,2"},
+    {question: "y = x² - 6x + 8 の頂点の x 座標", answer: "3"},
+    {question: "y = x² - 6x + 8 の頂点の y 座標", answer: "-1"},
+  ];
+}
+
+function normalizeAnswer(value: string): string {
+  return value.trim().toLowerCase().replace(/[（）()\s]/g, "").replace(/、/g, ",");
+}
+
+function startTest(): void {
+  const level = $<HTMLSelectElement>("#testLevel").value;
+  testQuestions = createTestQuestions(level);
+  testAnswers = [];
+  testIndex = 0;
+  $("#testLevelName").textContent = level;
+  show("test");
+  renderTestQuestion();
+}
+
+function renderTestQuestion(): void {
+  const question = testQuestions[testIndex];
+  $("#testProgress").textContent = `${testIndex + 1} / ${testQuestions.length} 問`;
+  $("#testQuestion").textContent = question.question;
+  const answer = $<HTMLInputElement>("#testAnswer");
+  answer.value = "";
+  answer.focus();
+  $<HTMLButtonElement>("#testNextButton").textContent = testIndex + 1 === testQuestions.length ? "採点する" : "次の問題";
+}
+
+function nextTestQuestion(): void {
+  testAnswers[testIndex] = $<HTMLInputElement>("#testAnswer").value;
+  if (testIndex + 1 < testQuestions.length) {
+    testIndex += 1;
+    renderTestQuestion();
+    return;
+  }
+  const mistakes = testQuestions.flatMap((question, index) =>
+    normalizeAnswer(testAnswers[index]) === normalizeAnswer(question.answer) ? [] : [{
+      index: index + 1, question: question.question, answer: testAnswers[index] || "未回答", correct: question.answer,
+    }]);
+  $("#testScore").textContent = `${testQuestions.length - mistakes.length} / ${testQuestions.length} 点`;
+  const paper = $("#testPaper");
+  paper.replaceChildren();
+  mistakes.forEach((mistake) => {
+    const row = document.createElement("p");
+    row.textContent = `第${mistake.index}問：${mistake.question}｜あなたの答え：${mistake.answer}｜正解：${mistake.correct}`;
+    paper.appendChild(row);
+  });
+  if (mistakes.length === 0) {
+    paper.textContent = "全問正解です！";
+  }
+  show("testResult");
 }
 
 function write(text: string): void {
@@ -380,6 +502,11 @@ $("#startButton").addEventListener("click", start);
 $("#talkButton").addEventListener("click", talk);
 $("#adventureButton").addEventListener("click", adventure);
 $("#statusButton").addEventListener("click", showStatus);
+$<HTMLButtonElement>("#testButton").addEventListener("click", () => show("testSelect"));
+$<HTMLButtonElement>("#testStartButton").addEventListener("click", startTest);
+$<HTMLButtonElement>("#testNextButton").addEventListener("click", nextTestQuestion);
+$<HTMLButtonElement>("#testBackButton").addEventListener("click", () => show("game"));
+$<HTMLButtonElement>("#testResultBackButton").addEventListener("click", () => show("game"));
 $<HTMLButtonElement>("#parkButton").addEventListener("click", startPark);
 $<HTMLButtonElement>("#adventureBackButton").addEventListener("click", exitPark);
 $<HTMLButtonElement>("#parkExitButton").addEventListener("click", exitPark);

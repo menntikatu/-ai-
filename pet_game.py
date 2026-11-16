@@ -76,6 +76,7 @@ section:not([hidden]){min-height:calc(100dvh - 1.5rem)}
 .park-log,.park-loading{height:calc(100dvh - 13rem);min-height:240px}
 .park-line{max-width:91%}
 input,select,button{min-height:2.8rem}
+.test-paper{max-height:55vh;overflow-y:auto}
 }
 </style>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -94,8 +95,11 @@ input,select,button{min-height:2.8rem}
 <div id="petAvatar" class="pet-avatar"></div><div id="speech" class="speech">こちらを見ている。</div>
 </div><div id="conversation"></div>
 <input id="msg" placeholder="ペットに話しかける">
-<button type="button" id="talkButton">話す</button><button type="button" id="adventureButton">冒険</button><button type="button" id="statusButton">学習・性格</button><button type="button" id="voiceButton">読み上げ: ON</button>
+<button type="button" id="talkButton">話す</button><button type="button" id="adventureButton">冒険</button><button type="button" id="statusButton">学習・性格</button><button type="button" id="testButton">テスト</button><button type="button" id="voiceButton">読み上げ: ON</button>
 </div></section>
+<section id="testSelect" hidden><h2>テスト</h2><p>難易度を選んで挑戦しましょう。</p><select id="testLevel"><option>初級</option><option>中級</option><option>上級</option><option>超上級</option></select><br><button type="button" id="testStartButton">開始</button><button type="button" id="testBackButton">戻る</button></section>
+<section id="test" hidden><h2><span id="testLevelName"></span>テスト</h2><p id="testProgress"></p><div class="park-card"><h3 id="testQuestion"></h3><input id="testAnswer" placeholder="答えを入力"><button type="button" id="testNextButton">次の問題</button></div></section>
+<section id="testResult" hidden><h2>テスト結果</h2><p id="testScore"></p><div id="testPaper" class="park-card"></div><button type="button" id="testResultBackButton">会話に戻る</button></section>
 <section id="adventureSelect" hidden><h2>冒険の場所</h2><div class="park-card"><h3>第1ステージ　公園</h3><p>公園で、通りすがりの人間とペットに出会います。</p><button type="button" id="parkButton">公園へ行く</button><button type="button" id="adventureBackButton">戻る</button></div></section>
 <section id="parkStage" hidden><div class="park"><h2>第1ステージ　公園</h2><p class="meta">あなたも会話に加わり、公園でのやりとりを見守っています。</p><div id="parkLoading" class="park-loading"><div>公園で会話をしています…</div></div><div id="parkLog" class="park-log" hidden></div><button type="button" id="parkExitButton" onclick="exitPark()" disabled>終了</button></div></section>
 <div id="questBoard" class="quest-board" hidden><h3>QUEST</h3><p id="questText">ペットにりんごの存在を教える</p></div>
@@ -119,6 +123,7 @@ def ask(action, message):
 {state['species']}らしい自然な語尾や口調を少し使ってください。ただし、読みにくくなるほど誇張しないでください。
 会話は自然に成立し、挨拶、食事、家、動物など基本的な物の名前と常識は知っています。
 ただし、まだ出会っていない物・行動・概念や、特別な言葉の意味は知りません。
+数学の計算方法や公式、漢字の読み方などのテスト知識は持っていません。聞かれたら、分からないと素直に答えてください。
 インターネット、検索、ブラウザ、外部サイトにはアクセスできず、「ネットで調べて」などの依頼にも応じないでください。
 知らない言葉が出ても毎回質問せず、会話の流れから意味を推測して自然に返答してください。
 意味が分からないと会話が続けられない場合だけ、短く一度質問してください。
