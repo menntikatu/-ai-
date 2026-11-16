@@ -119,13 +119,24 @@ function renderTestQuestion() {
     const question = testQuestions[testIndex];
     $("#testProgress").textContent = `${testIndex + 1} / ${testQuestions.length} 問`;
     $("#testQuestion").textContent = question.question;
-    const answer = $("#testAnswer");
-    answer.value = "";
-    answer.focus();
-    $("#testNextButton").textContent = testIndex + 1 === testQuestions.length ? "採点する" : "次の問題";
+    $("#testAnswer").textContent = "ペットが考えています…";
+    $("#testNextButton").textContent = "ペットに解かせる";
 }
-function nextTestQuestion() {
-    testAnswers[testIndex] = $("#testAnswer").value;
+async function nextTestQuestion() {
+    const button = $("#testNextButton");
+    button.disabled = true;
+    const question = testQuestions[testIndex];
+    try {
+        const result = await call("test_answer", question.question, { expected: question.answer });
+        testAnswers[testIndex] = result.answer ?? "分かりません";
+        $("#testAnswer").textContent = `ペットの答え：${testAnswers[testIndex]}${result.correct ? "（正解）" : "（不正解）"}`;
+    }
+    catch (error) {
+        button.disabled = false;
+        alert(`テスト中に通信エラーが発生しました: ${error instanceof Error ? error.message : "不明なエラー"}`);
+        return;
+    }
+    button.disabled = false;
     if (testIndex + 1 < testQuestions.length) {
         testIndex += 1;
         renderTestQuestion();

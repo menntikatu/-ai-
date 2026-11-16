@@ -98,7 +98,7 @@ input,select,button{min-height:2.8rem}
 <button type="button" id="talkButton">話す</button><button type="button" id="adventureButton">冒険</button><button type="button" id="statusButton">学習・性格</button><button type="button" id="testButton">テスト</button><button type="button" id="voiceButton">読み上げ: ON</button>
 </div></section>
 <section id="testSelect" hidden><h2>テスト</h2><p>難易度を選んで挑戦しましょう。</p><select id="testLevel"><option>初級</option><option>中級</option><option>上級</option><option>超上級</option></select><br><button type="button" id="testStartButton">開始</button><button type="button" id="testBackButton">戻る</button></section>
-<section id="test" hidden><h2><span id="testLevelName"></span>テスト</h2><p id="testProgress"></p><div class="park-card"><h3 id="testQuestion"></h3><input id="testAnswer" placeholder="答えを入力"><button type="button" id="testNextButton">次の問題</button></div></section>
+<section id="test" hidden><h2><span id="testLevelName"></span>テスト</h2><p id="testProgress"></p><div class="park-card"><h3 id="testQuestion"></h3><p id="testAnswer">ペットが考えています…</p><button type="button" id="testNextButton">ペットに解かせる</button></div></section>
 <section id="testResult" hidden><h2>テスト結果</h2><p id="testScore"></p><div id="testPaper" class="park-card"></div><button type="button" id="testResultBackButton">会話に戻る</button></section>
 <section id="adventureSelect" hidden><h2>冒険の場所</h2><div class="park-card"><h3>第1ステージ　公園</h3><p>公園で、通りすがりの人間とペットに出会います。</p><button type="button" id="parkButton">公園へ行く</button><button type="button" id="adventureBackButton">戻る</button></div></section>
 <section id="parkStage" hidden><div class="park"><h2>第1ステージ　公園</h2><p class="meta">あなたも会話に加わり、公園でのやりとりを見守っています。</p><div id="parkLoading" class="park-loading"><div>公園で会話をしています…</div></div><div id="parkLog" class="park-log" hidden></div><button type="button" id="parkExitButton" onclick="exitPark()" disabled>終了</button></div></section>
@@ -248,6 +248,28 @@ def get_profile():
     return {"iq": iq, "profile": result.choices[0].message.content.strip()}
 
 
+def answer_test_question(question, expected):
+    client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=state["key"])
+    result = client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=[
+            {
+                "role": "system",
+                "content": f"""
+あなたは知能テストを受けるペット「{state['name']}」です。
+数学や漢字の知識は持っていないため、分からない問題は「分かりません」と答えてください。
+問題を解くために外部検索や計算機は使えません。知ったふりをせず、答えだけを短く返してください。
+問題: {question}
+""",
+            },
+            {"role": "user", "content": "この問題に答えてください。"},
+        ],
+    )
+    answer = result.choices[0].message.content.strip()
+    normalized = lambda value: value.lower().replace(" ", "").replace("　", "").replace("（", "").replace("）", "")
+    return {"answer": answer, "correct": normalized(answer) == normalized(expected)}
+
+
 def teaches_apple(message):
     explanation_words = ("果物", "赤い", "甘い", "食べる", "食べて", "木になる", "丸い")
     return "りんご" in message and any(word in message for word in explanation_words)
@@ -315,6 +337,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = state["adventure"]
             elif action == "adventure_next":
                 result = next_adventure()
+            elif action == "test_answer":
+                result = answer_test_question(message, data.get("expected", ""))
             else:
                 answer = ask(action, message)
                 state["memories"].append(f"プレイヤー: {message} / ペット: {answer}")
